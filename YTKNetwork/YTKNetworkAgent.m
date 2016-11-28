@@ -25,6 +25,7 @@
 #import "YTKNetworkConfig.h"
 #import "YTKNetworkPrivate.h"
 #import <pthread/pthread.h>
+#import "YlogUtils.h"
 
 #if __has_include(<AFNetworking/AFNetworking.h>)
 #import <AFNetworking/AFNetworking.h>
@@ -200,8 +201,8 @@
     if (customUrlRequest) {
         __block NSURLSessionDataTask *dataTask = nil;
         dataTask = [_manager dataTaskWithRequest:customUrlRequest completionHandler:^(NSURLResponse * _Nonnull response, id  _Nullable responseObject, NSError * _Nullable error) {
-            [self handleRequestResult:dataTask responseObject:responseObject error:error];
-        }];
+            [self handleRequestResult:dataTask response:response responseObject:responseObject error:error];
+             }];
         request.requestTask = dataTask;
     } else {
         request.requestTask = [self sessionTaskForRequest:request error:&requestSerializationError];
@@ -285,7 +286,7 @@
     return YES;
 }
 
-- (void)handleRequestResult:(NSURLSessionTask *)task responseObject:(id)responseObject error:(NSError *)error {
+- (void)handleRequestResult:(NSURLSessionTask *)task response:(NSURLResponse*)response responseObject:(id)responseObject error:(NSError *)error {
     Lock();
     YTKBaseRequest *request = _requestsRecord[@(task.taskIdentifier)];
     Unlock();
@@ -298,6 +299,9 @@
     if (!request) {
         return;
     }
+    NSString *responseString=[[NSString alloc] initWithData:responseObject encoding:[YTKNetworkUtils stringEncodingWithRequest:request]];
+    [YlogUtils logDebugInfoWithResponse:response responseString:responseString request:task.currentRequest error:error];
+
 
     YTKLog(@"Finished Request: %@", NSStringFromClass([request class]));
 
@@ -444,9 +448,11 @@
     }
 
     __block NSURLSessionDataTask *dataTask = nil;
+    
+    [YlogUtils logDebugInfoWithRequest:request requestParams:parameters httpMethod:method];
     dataTask = [_manager dataTaskWithRequest:request
                            completionHandler:^(NSURLResponse * __unused response, id responseObject, NSError *_error) {
-                               [self handleRequestResult:dataTask responseObject:responseObject error:_error];
+                               [self handleRequestResult:dataTask response:response responseObject:responseObject error:_error];
                            }];
 
     return dataTask;
@@ -498,7 +504,7 @@
                 return [NSURL fileURLWithPath:downloadTargetPath isDirectory:NO];
             } completionHandler:
                             ^(NSURLResponse * _Nonnull response, NSURL * _Nullable filePath, NSError * _Nullable error) {
-                                [self handleRequestResult:downloadTask responseObject:filePath error:error];
+                                [self handleRequestResult:downloadTask response:response responseObject:filePath error:error];
                             }];
             resumeSucceeded = YES;
         } @catch (NSException *exception) {
@@ -511,7 +517,7 @@
             return [NSURL fileURLWithPath:downloadTargetPath isDirectory:NO];
         } completionHandler:
                         ^(NSURLResponse * _Nonnull response, NSURL * _Nullable filePath, NSError * _Nullable error) {
-                            [self handleRequestResult:downloadTask responseObject:filePath error:error];
+                            [self handleRequestResult:downloadTask response:response responseObject:filePath error:error];
                         }];
     }
     return downloadTask;
